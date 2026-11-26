@@ -346,7 +346,7 @@ choose_parse_schedule() {
 
 choose_autoupdate_schedule() {
     echo ""
-    if ! ask_yes_no "Включить автообновление sing-box и скриптов (singkeen.sh update)?" "yes"; then
+    if ! ask_yes_no "Включить автообновление sing-box и скриптов (singkeen.sh update)?" "no"; then
         AUTOUPDATE_CRON=""
         return 0
     fi
