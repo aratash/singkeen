@@ -1,0 +1,11 @@
+# Тут хранятся URL на подписки/конфигурации
+## Здесь можно писать комментарии в отдельных строках
+## Так же можно указывать тег конфига/подписки перед URL
+### URL подписки с тегом
+#coolsub https://coolsub.crazy/some_user_id
+### URL подписки без тега
+#https://coolsub.crazy/some_user2_id
+### URL конфига с тегом
+#coolsub vless://UUID@coolsub.crazy:443?encryption=none&flow=xtls-rprx-vision&type=tcp&headerType=none&security=reality&fp=edge&pbk=pbk&sid=111&sni=some.site#CONF1
+### URL конфига без тега
+#vless://UUID2@coolsub.crazy:443?encryption=none&flow=xtls-rprx-vision&type=tcp&headerType=none&security=reality&fp=edge&pbk=pbc&sid=122&sni=some.site#CONF2

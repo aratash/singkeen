@@ -1,0 +1,280 @@
+{
+  "log": {
+    "disabled": false,
+    "level": "warn",
+    "output": "/opt/var/log/sing-box/box.log",
+    "timestamp": true
+  },
+  "dns": {
+    "servers": [
+      {
+        "type": "hosts",
+        "tag": "hosts",
+        "path": [],
+        "predefined": {
+          "dns.google": ["8.8.8.8", "8.8.4.4", "2001:4860:4860::8888", "2001:4860:4860::8844"],
+          "cloudflare-dns.com": ["1.1.1.1", "1.0.0.1", "2606:4700:4700::1111", "2606:4700:4700::1001"],
+          "common.dot.dns.yandex.net": ["77.88.8.8", "77.88.8.1", "2a02:6b8::feed:0ff", "2a02:6b8:0:1::feed:0ff"]
+        }
+      },
+      {
+        "tag": "google",
+        "type": "udp",
+        "server": "8.8.8.8",
+        "detour": "balancer"
+      },
+      {
+        "tag": "cloudflare",
+        "type": "udp",
+        "server": "1.1.1.1",
+        "detour": "balancer"
+      },
+      {
+        "tag": "yandex",
+        "type": "tls",
+        "server": "77.88.8.8"
+      },
+      {
+        "type": "fakeip",
+        "tag": "fakeip",
+        "inet4_range": "198.18.0.0/15",
+        "inet6_range": "fc00::/18"
+      }
+    ],
+    "rules": [
+      // ADs -> Block
+      {
+        "rule_set": [
+          "geosite-category-ads",
+          "geosite-category-ads-all",
+          "geosite-category-ads-and-telemetry",
+          "geosite-category-ru@ads"
+        ],
+        "action": "predefined",
+        "rcode": "NXDOMAIN"
+      },
+      // Permanent -> Yandex DNS
+      {
+        "domain": [
+          "ticktick.com",
+          "wplace.live",
+          "backend.wplace.live"
+        ],
+        "domain_keyword": [
+          "wplace",
+          "rytsar-semi-korolevstv",
+          "boosty",
+          "donationalerts"
+        ],
+        "server": "yandex"
+      },
+      // Permanent -> Remote DNS
+      {
+        "domain": [
+          "habr.com"
+        ],
+        "server": "cloudflare"
+      },
+      // RU -> Local
+      {
+        "rule_set": [
+          "geosite-category-ru", 
+          "geosite-category-gov-ru"
+        ],
+        "domain_suffix": [".ru", ".su", ".рф", ".mos.ru"],
+        "server": "yandex"
+      },
+       // FakeIP
+      {
+        "query_type": ["A", "AAAA"],
+        "server": "fakeip"
+      }
+    ],
+    "final": "cloudflare",
+    "strategy": "ipv4_only",
+    "disable_cache": false,
+    "disable_expire": false,
+    "independent_cache": false,
+    "cache_capacity": 0,
+    "optimistic": true, 
+    "reverse_mapping": false
+  },
+  "inbounds": [
+   {
+      "type": "redirect",
+      "tag": "redirect-in",
+      "listen": "::",
+      "listen_port": 61219
+    },
+    {
+      "type": "tproxy",
+      "tag": "tproxy-in",
+      "network": "udp",
+      "listen": "::",
+      "listen_port": 61219,
+      "udp_timeout": "1m"
+    },
+    {
+      "type": "direct",
+      "tag": "dns-in",
+      "listen": "127.0.0.1",
+      "listen_port": 8053,
+      "network": ["udp", "tcp"]
+    }
+  ],
+  "outbounds": [
+    {
+      "type": "urltest",
+      "tag": "balancer",
+      "outbounds": [],
+      "url": "https://cp.cloudflare.com/generate_204",
+      "interval": "10m",
+      "tolerance": 50,
+      "idle_timeout": "15m",
+      "interrupt_exist_connections": false
+    },
+    {
+      "type": "direct",
+      "tag": "direct"
+    }
+  ],
+  "route": {
+    "rule_set": [
+      {
+        "tag": [
+          "geosite-category-ru", 
+          "geosite-category-ru@ads", 
+          "geosite-category-gov-ru",
+          "geosite-category-ads",
+          "geosite-category-ads-all",
+          "geosite-category-ads-and-telemetry"
+        ],
+        "type": "remote",
+        "format": "binary",
+        "url": "https://github.com/SagerNet/sing-geosite/raw/refs/heads/rule-set/{tag}.srs",
+        "http_client": {
+          "detour": "balancer"
+        }
+      },
+      {
+        "tag": "geoip-ru",
+        "type": "remote",
+        "format": "binary",
+        "url": "https://github.com/SagerNet/sing-geoip/raw/refs/heads/rule-set/geoip-ru.srs", 
+        "http_client": {
+          "detour": "balancer"
+        }
+      }
+    ],
+    "rules": [
+      // Hijack DNS 
+      {
+        "inbound": "dns-in",
+        "action": "hijack-dns"
+      },
+      // Sniff trafic 
+      {
+        "inbound": ["redirect-in", "tproxy-in"],
+        "action": "sniff",
+        "timeout": "100ms"
+      },
+      // NetBIOS -> Block
+      {
+        "network": "udp",
+        "port": [135, 137, 138, 139],
+        "action": "reject"
+      },
+      // ADs -> Block
+      {
+        "rule_set": [
+          "geosite-category-ads", 
+          "geosite-category-ads-all", 
+          "geosite-category-ads-and-telemetry"
+        ],
+        "action": "reject"
+      },
+      // Permanent -> Proxy
+      {
+        "domain": [
+          "habr.com",
+          "pixabay.com"
+        ],
+        "domain_keyword": [],
+        "domain_suffix": [],
+        "ip_cidr": [
+          "1.1.1.1/32"
+        ],
+        "outbound": "balancer"
+      },
+      // Permanent -> Direct
+      {
+        "domain": [
+          "ticktick.com",
+          "wplace.live",
+          "backend.wplace.live"
+        ],
+        "domain_keyword": [
+          "wplace",
+          "rytsar-semi-korolevstv",
+          "boosty",
+          "donationalerts"
+        ],
+        "domain_suffix": [],
+        "ip_cidr": [
+          
+        ],
+        "outbound": "direct"
+      },
+      // BitTorrent -> Direct
+      {
+        "protocol": "bittorrent",
+        "outbound": "direct"
+      },
+      // LAN -> Direct
+      {
+        "ip_is_private": true,
+        "ip_cidr": [
+          "224.0.0.0/4",
+          "255.255.255.255/32"
+        ],
+        "outbound": "direct"
+      },
+      // RU -> Direct
+      {
+        "rule_set": [
+          "geosite-category-ru", 
+          "geosite-category-gov-ru", 
+          "geoip-ru"
+        ],
+        "domain_suffix": [".ru", ".su", ".рф", ".mos.ru"],
+        "outbound": "direct"
+      },
+      // QUIC -> Block
+      {
+        "network": "udp",
+        "port": 443,
+        "action": "reject"
+      }
+    ],
+    "final": "balancer",
+    "default_domain_resolver": "cloudflare",
+    "auto_detect_interface": false
+  },
+  "experimental": {
+    "cache_file": {
+      "enabled": true,
+      "path": "/opt/etc/sing-box/cache.db",
+      "store_fakeip": true,
+      "store_dns": true
+    },
+    "clash_api": {
+      "external_controller": "0.0.0.0:9090",
+      "external_ui": "ui",
+      "external_ui_download_url": "https://github.com/MetaCubeX/metacubexd/archive/refs/heads/gh-pages.zip",
+      "external_ui_download_detour": "balancer",
+      "secret": "",
+      "default_mode": "rule",
+      "access_control_allow_private_network": false
+    }
+  }
+}

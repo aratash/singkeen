@@ -1,0 +1,115 @@
+#!/bin/sh
+# Made with Gemini
+
+ENABLED=yes
+PROCS=sing-box
+CONFIG="/opt/etc/sing-box/config.json"
+WORKDIR="/opt/etc/sing-box"
+ARGS="run -c $CONFIG -D $WORKDIR"
+PREARGS=""
+DESC="sing-box"
+PATH=/opt/sbin:/opt/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+# Параметры парсера и Clash API
+PARSER_SCRIPT="/opt/bin/singbox-subs-parser.py"
+SUBS_FILE="/opt/etc/sing-box/subs.txt"
+#PROTOCOLS='vless,vmess,trojan,shadowsocks,hysteria2,hysteria,tuic,anytls,naive,socks,http' # Все поддерживаемые протоколы
+PROTOCOLS='vless,vmess,trojan,shadowsocks,hysteria2,hysteria,tuic,anytls,naive,socks,http'
+REGEX_FILTER='(?is)(LTE|Авто|Быстрые|Если другие|Для моб|Все операторы|Внизу)'
+API_URL="http://127.0.0.1:9090/configs?force=true"
+API_SECRET=""
+
+do_reload() {
+    if [ -z "$(pidof $PROCS)" ]; then
+        echo "$DESC is not running. Starting instead..."
+        $0 start
+        return $?
+    fi
+
+    echo "Checking $DESC configuration..."
+    if ! /opt/bin/$PROCS check -c "$CONFIG" -D "$WORKDIR"; then
+        echo "Error: Configuration check failed! Keeping old running instance."
+        return 1
+    fi
+
+    echo "Restarting $DESC to apply new configuration..."
+    $0 restart
+    return $?
+}
+
+do_parse() {
+    echo "Running subscription parser..."
+    if /opt/bin/python3 "$PARSER_SCRIPT" -c "$SUBS_FILE" -I "$CONFIG" -pp "$PROTOCOLS" -if -rf "$REGEX_FILTER"; then
+        echo "Subscriptions parsed successfully."
+        if [ -n "$(pidof $PROCS)" ]; then
+            do_reload
+        fi
+    else
+        echo "Error: Parser execution failed!"
+        return 1
+    fi
+}
+
+case "$1" in
+    enable)
+        sed -i 's/^ENABLED=.*/ENABLED=yes/' "$0"
+        echo "Autostart for $DESC enabled (ENABLED=yes)."
+        exit 0
+        ;;
+    disable)
+        sed -i 's/^ENABLED=.*/ENABLED=no/' "$0"
+        echo "Autostart for $DESC disabled (ENABLED=no)."
+        exit 0
+        ;;
+    reload)
+        do_reload
+        exit $?
+        ;;
+    parse)
+        do_parse
+        exit $?
+        ;;
+    help)
+        echo "Usage: sb {start|stop|restart|reload|parse|enable|disable|status|check|help}"
+        echo ""
+        echo "  enable  - Enable auto start service"
+        echo "  disable - Disable auto start service"
+        echo "  start   - Start service"
+        echo "  stop    - Stop service"
+        echo "  restart - Hard-restart service"
+        echo "  reload  - Check config file and reload service if config is correct"
+        echo "  status  - Show service status"
+        echo "  check   - Check config file"
+        echo "  kill    - Kill service now"
+        echo "  help    - Show this message"
+        ;;
+    check)
+        echo -n "Checking $DESC configuration... "
+        # Проверка синтаксиса 
+        if ! /opt/bin/$PROCS check -c "$CONFIG" -D "$WORKDIR"; then
+            /opt/bin/$PROCS check -c "$CONFIG" -D "$WORKDIR"
+            return 1
+        fi
+        ;;
+    start|stop|restart|status|kill)
+        # Передаем штатные команды в системный обработчик Entware
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|restart|reload|parse|enable|disable|status|check|help}"
+        exit 1
+        ;;
+esac
+
+# Расширение лимита открытых сокетов
+ulimit -n 65535 2>/dev/null || true
+
+# Подключаем стандартный обработчик Entware
+. /opt/etc/init.d/rc.func
+
+# После выполнения start/stop/restart обновляем правила фаервола Keenetic
+case "$1" in
+    start|stop|restart)
+        table=nat type=iptables /opt/etc/ndm/netfilter.d/050-singbox.sh
+        table=mangle type=iptables /opt/etc/ndm/netfilter.d/050-singbox.sh
+        ;;
+esac

@@ -1,0 +1,5 @@
+SHELL=/bin/sh
+PATH=/sbin:/bin:/usr/sbin:/usr/bin:/opt/bin:/opt/sbin
+
+# Update sing-box subscribtion every 6 hours and soft reload configuration
+0 */6 * * * root /opt/etc/init.d/S99sing-box parse >> /opt/var/log/sing-box/parse.log 2>&1
