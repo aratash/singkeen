@@ -84,7 +84,7 @@
         "domain_suffix": [".ru", ".su", ".рф", ".mos.ru"],
         "server": "yandex"
       },
-       // FakeIP
+      // FakeIP
       {
         "query_type": ["A", "AAAA"],
         "server": "fakeip"
@@ -117,7 +117,7 @@
     {
       "type": "direct",
       "tag": "dns-in",
-      "listen": "127.0.0.1",
+      "listen": "::",
       "listen_port": 8053,
       "network": ["udp", "tcp"]
     }
@@ -221,7 +221,6 @@
         ],
         "domain_suffix": [],
         "ip_cidr": [
-          
         ],
         "outbound": "direct"
       },
@@ -249,6 +248,11 @@
         "domain_suffix": [".ru", ".su", ".рф", ".mos.ru"],
         "outbound": "direct"
       },
+      // DoT -> Direct
+      {
+        "port": 853,
+        "outbound": "direct"
+      },
       // QUIC -> Block
       {
         "network": "udp",
@@ -257,7 +261,7 @@
       }
     ],
     "final": "balancer",
-    "default_domain_resolver": "cloudflare",
+    "default_domain_resolver": "yandex",
     "auto_detect_interface": false
   },
   "experimental": {
